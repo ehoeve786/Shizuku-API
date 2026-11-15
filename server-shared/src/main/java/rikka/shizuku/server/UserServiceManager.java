@@ -93,6 +93,9 @@ public abstract class UserServiceManager {
 
     private void removeUserServiceLocked(UserServiceRecord record) {
         if (userServiceRecords.values().remove(record)) {
+            for (List<UserServiceRecord> list : packageUserServiceRecords.values()) {
+                list.remove(record);
+            }
             record.destroy();
             onUserServiceRecordRemoved(record);
         }
@@ -153,7 +156,15 @@ public abstract class UserServiceManager {
                 } else if (!newRecord.starting) {
                     newRecord.setStartingTimeout(DateUtils.SECOND_IN_MILLIS * 30);
 
-                    Runnable runnable = () -> startUserService(newRecord, key, newRecord.token, packageName, className, processNameSuffix, uid, use32Bits, debug);
+                    Runnable runnable = () -> {
+                        try {
+                            startUserService(newRecord, key, newRecord.token, packageName, className, processNameSuffix, uid, use32Bits, debug);
+                        } catch (Throwable tr) {
+                            // An uncaught exception on this thread would take the whole server down
+                            LOGGER.w(tr, "Failed to start process for service record %s (%s)", key, newRecord.token);
+                            newRecord.removeSelf();
+                        }
+                    };
                     executor.execute(runnable);
                     return 0;
                 }
@@ -276,13 +287,15 @@ public abstract class UserServiceManager {
     }
 
     public void removeUserServicesForPackage(String packageName) {
-        List<UserServiceRecord> list = packageUserServiceRecords.get(packageName);
-        if (list != null) {
-            for (UserServiceRecord record : list) {
-                record.removeSelf();
-                LOGGER.i("Remove user service %s for package %s", record.token, packageName);
+        synchronized (this) {
+            List<UserServiceRecord> list = packageUserServiceRecords.remove(packageName);
+            if (list != null) {
+                // Removing a record also takes it out of this list, so iterate over a copy
+                for (UserServiceRecord record : new ArrayList<>(list)) {
+                    record.removeSelf();
+                    LOGGER.i("Remove user service %s for package %s", record.token, packageName);
+                }
             }
-            packageUserServiceRecords.remove(packageName);
         }
     }
 

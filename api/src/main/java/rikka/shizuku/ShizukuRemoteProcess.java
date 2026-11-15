@@ -25,6 +25,7 @@ public class ShizukuRemoteProcess extends Process implements Parcelable {
     private IRemoteProcess remote;
     private OutputStream os;
     private InputStream is;
+    private InputStream es;
 
     ShizukuRemoteProcess(IRemoteProcess remote) {
         this.remote = remote;
@@ -69,11 +70,15 @@ public class ShizukuRemoteProcess extends Process implements Parcelable {
 
     @Override
     public InputStream getErrorStream() {
-        try {
-            return new ParcelFileDescriptor.AutoCloseInputStream(remote.getErrorStream());
-        } catch (RemoteException e) {
-            throw new RuntimeException(e);
+        // Each remote call creates a new pipe competing for the same output, so ask only once
+        if (es == null) {
+            try {
+                es = new ParcelFileDescriptor.AutoCloseInputStream(remote.getErrorStream());
+            } catch (RemoteException e) {
+                throw new RuntimeException(e);
+            }
         }
+        return es;
     }
 
     @Override

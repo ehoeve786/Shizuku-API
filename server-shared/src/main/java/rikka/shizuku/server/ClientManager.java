@@ -26,7 +26,9 @@ public class ClientManager<ConfigMgr extends ConfigManager> {
     }
 
     public List<ClientRecord> findClients(int uid) {
-        synchronized (this) {
+        // Death recipients remove records on other threads, so every iteration has to hold the
+        // list's own lock
+        synchronized (clientRecords) {
             List<ClientRecord> res = new ArrayList<>();
             for (ClientRecord clientRecord : clientRecords) {
                 if (clientRecord.uid == uid) {
@@ -38,9 +40,11 @@ public class ClientManager<ConfigMgr extends ConfigManager> {
     }
 
     public ClientRecord findClient(int uid, int pid) {
-        for (ClientRecord clientRecord : clientRecords) {
-            if (clientRecord.pid == pid && clientRecord.uid == uid) {
-                return clientRecord;
+        synchronized (clientRecords) {
+            for (ClientRecord clientRecord : clientRecords) {
+                if (clientRecord.pid == pid && clientRecord.uid == uid) {
+                    return clientRecord;
+                }
             }
         }
         return null;

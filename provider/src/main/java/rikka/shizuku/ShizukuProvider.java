@@ -9,9 +9,11 @@ import android.content.IntentFilter;
 import android.content.pm.ProviderInfo;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.Process;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -119,14 +121,14 @@ public class ShizukuProvider extends ContentProvider {
 
         Log.d(TAG, "request binder in non-provider process");
 
+        // Before Android 13 a receiver registered at runtime can be reached by any app, so the
+        // broadcast is only treated as a hint that a binder is available. The binder itself is
+        // always fetched from this app's own provider, never taken from the broadcast.
         BroadcastReceiver receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                BinderContainer container = intent.getParcelableExtra(EXTRA_BINDER);
-                if (container != null && container.binder != null) {
-                    Log.i(TAG, "binder received from broadcast");
-                    Shizuku.onBinderReceived(container.binder, context.getPackageName());
-                }
+                Log.i(TAG, "binder announced by broadcast");
+                fetchBinderFromProviderProcess(context);
             }
         };
 
@@ -136,6 +138,10 @@ public class ShizukuProvider extends ContentProvider {
             context.registerReceiver(receiver, new IntentFilter(ACTION_BINDER_RECEIVED));
         }
 
+        fetchBinderFromProviderProcess(context);
+    }
+
+    private static void fetchBinderFromProviderProcess(@NonNull Context context) {
         Bundle reply;
         try {
             reply = context.getContentResolver().call(Uri.parse("content://" + context.getPackageName() + ".shizuku"),
@@ -165,7 +171,24 @@ public class ShizukuProvider extends ContentProvider {
         if (!info.exported)
             throw new IllegalStateException("android:exported must be true");
 
+        if (info.readPermission == null && info.writePermission == null) {
+            Log.w(TAG, "ShizukuProvider is not protected by a permission. Add " +
+                    "android:permission=\"android.permission.INTERACT_ACROSS_USERS_FULL\" to its manifest entry.");
+        }
+
         isProviderProcess = true;
+    }
+
+    /**
+     * Whether the caller of the current provider call may hand a binder to this app: only the
+     * Shizuku server, which runs as root or shell, or this app itself.
+     */
+    private static boolean isCallerTrustedToSendBinder() {
+        int uid = Binder.getCallingUid();
+        if (uid == Process.myUid()) return true;
+
+        int appId = uid % 100000;
+        return appId == 0 /* root */ || appId == 2000 /* shell */ || appId == Process.SYSTEM_UID;
     }
 
     @Override
@@ -194,10 +217,20 @@ public class ShizukuProvider extends ContentProvider {
         Bundle reply = new Bundle();
         switch (method) {
             case METHOD_SEND_BINDER: {
+                // Defense in depth for apps that forgot to protect the provider with a permission
+                if (!isCallerTrustedToSendBinder()) {
+                    Log.w(TAG, "sendBinder from untrusted uid " + Binder.getCallingUid());
+                    return null;
+                }
                 handleSendBinder(extras);
                 break;
             }
             case METHOD_GET_BINDER: {
+                // Only meant for the other processes of this app
+                if (Binder.getCallingUid() != Process.myUid()) {
+                    Log.w(TAG, "getBinder from other uid " + Binder.getCallingUid());
+                    return null;
+                }
                 if (!handleGetBinder(reply)) {
                     return null;
                 }
