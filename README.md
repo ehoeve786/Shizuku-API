@@ -4,7 +4,7 @@ Shizuku API is the API provided by [Shizuku](https://github.com/RikkaApps/Shizuk
 
 ## Requirements
 
-To use Shizuku APIs, you need to guide the user to install Shizuku or Sui first. Both of them require Android 6.0+.
+To use Shizuku APIs, you need to guide the user to install Shizuku or Sui first. Upstream Shizuku and Sui require Android 6.0+; this fork of the API (and the Shizuku fork it belongs to) requires Android 7.0+ (`minSdk` 24).
 
 ### Shizuku
 
@@ -20,7 +20,7 @@ No additional setup is required except for the installation. You can guide the r
 
 ## Demo
 
-A demo project is provided. See [demo](https://github.com/RikkaApps/Shizuku-API/tree/master/demo) for more.
+An example app is provided. See [example](example) for more.
 
 ## Guide
 
@@ -29,6 +29,11 @@ I'll say the difficult words first, using Shizuku APIs is similar to framework o
 ### Add dependency
 
 ![Maven Central](https://img.shields.io/maven-central/v/dev.rikka.shizuku/api)
+
+> The `dev.rikka.shizuku` artifacts on Maven Central are published by the upstream project
+> ([RikkaApps/Shizuku-API](https://github.com/RikkaApps/Shizuku-API)) and do not contain the changes made in this fork.
+> This fork is not published; to use its code, add the repository as a git submodule or a Gradle
+> composite build (see [example/settings.gradle](example/settings.gradle)).
 
 ```groovy
 def shizuku_version = (the version above)
@@ -245,7 +250,7 @@ We also provides [HiddenApiRefinePlugin](https://github.com/RikkaApps/HiddenApiR
 ### Changes
 
 - Dependency changed (see Guide below)
-- Self-implemented permission is used from v11, the API is the same to runtime permission (see the demo, and existing runtime permission still works)
+- Self-implemented permission is used from v11, the API is the same to runtime permission (see the example app, and existing runtime permission still works)
 - Package name was renamed to `rikka.shizuku` (replace all `moe.shizuku.api.` to `rikka.shizuku.`)
 - `ShizukuService` class is renamed to `Shizuku`
 - Methods in `Shizuku` class now throw `RuntimeException` on failure rather than `RemoteException` like other Android APIs

@@ -24,7 +24,6 @@ android {
 dependencies {
     implementation project(":api")
     implementation libs.androidx.annotation
-    implementation libs.androidx.core
 }
 
 ext {

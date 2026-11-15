@@ -10,14 +10,19 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public abstract class RishService {
 
     private static final String TAG = "RishService";
 
-    private static final Map<Integer, RishHost> HOSTS = new HashMap<>();
+    // Keyed by uid and pid of the client: a pid alone can be reused by another app
+    private static final Map<Long, RishHost> HOSTS = new ConcurrentHashMap<>();
+
+    private static long callingKey() {
+        return ((long) Binder.getCallingUid() << 32) | (Binder.getCallingPid() & 0xffffffffL);
+    }
 
     private static final boolean IS_ROOT = Os.getuid() == 0;
 
@@ -52,13 +57,13 @@ public abstract class RishService {
         host.start();
         Log.d(TAG, "Forked " + host.getPid());
 
-        HOSTS.put(callingPid, host);
+        HOSTS.put(callingKey(), host);
     }
 
     private void setWindowSize(long size) {
         int callingPid = Binder.getCallingPid();
 
-        RishHost host = HOSTS.get(callingPid);
+        RishHost host = HOSTS.get(callingKey());
         if (host == null) {
             Log.d(TAG, "Not existing host created by " + callingPid);
             return;
@@ -70,7 +75,7 @@ public abstract class RishService {
     private int getExitCode() {
         int callingPid = Binder.getCallingPid();
 
-        RishHost host = HOSTS.get(callingPid);
+        RishHost host = HOSTS.get(callingKey());
         if (host == null) {
             Log.d(TAG, "Not existing host created by " + callingPid);
             return -1;
